@@ -1,12 +1,8 @@
 from pprint import pprint as pp
 
-class Vect2(object):
+class PointXY:
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-
-class PointXY(Vect2):
+        self.x, self.y = x, y
     def getInGrid(self, grid):
         return grid[self.y][self.x]
     def setInGrid(self, grid, value):
