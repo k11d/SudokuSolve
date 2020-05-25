@@ -1,4 +1,4 @@
-﻿#!/usr/bin/python3
+﻿#-*-coding: utf-8-*-
 import numpy as np
 from lib.sudoku_test_grids import hard_grid, grid_easy, grid_easy_1
 import sys
@@ -184,14 +184,14 @@ def _mainloop():
         screen.fill(SG.background)
         updated_rects = SG.render(GRID, screen)
         pygame.display.update(updated_rects)
-        
+
     if SS.SOLVED:
         _update()
         while not SS.QUIT:
             _handle_events()
     else:
         _update()
-        _handle_events()  
+        _handle_events()
 
 # @profile
 def run():
