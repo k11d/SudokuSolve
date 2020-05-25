@@ -2,6 +2,7 @@
 import numpy as np
 from lib.sudoku_test_grids import hard_grid, grid_easy, grid_easy_1
 import sys
+import random
 import pygame
 from pygame.locals import *
 
@@ -26,12 +27,23 @@ class SudokuSolver:
 
     def __init__(self, grid):
         self.grid = grid
+        self._original_grid = [
+            [v for v in line]
+            for line in self.grid
+        ]
+        self._modif_stack = []
 
-    def gridPositions(self):
-        for y in range(len(self.grid)):
-            for x in range(len(self.grid[0])):
-                # yield SudokuSolver.PointXY(x,y)
-                yield SudokuSolver.PointXY(x,y)
+    def gridPositions(self, randomized=False):
+        def _iter():
+            for y in range(len(self.grid)):
+                for x in range(len(self.grid[0])):
+                    yield SudokuSolver.PointXY(x, y)
+        if randomized:
+            pos = list(_iter())
+            random.shuffle(pos)
+            yield from pos
+        else:
+            yield from _iter()
 
     def possible(self, pos, value):
         for i in range(9):
@@ -48,39 +60,30 @@ class SudokuSolver:
                     return False
         return True
 
-    def count_possibles(self, pos):
-        possibles = 0
-        for n in range(1, 10):
-            if self.possible(pos, n):
-                possibles += 1
-        return possibles
-
 
     def solve(self, screen_update_handle):
-        for p in self.gridPositions():
-            if p.getInGrid(self.grid) == 0:
-                for n in range(1, 10):
-                    if self.possible(p, n):
-                        if not self.SOLVED:
-                            SG.set_state(p.x, p.y, 'found')
-                            p.setInGrid(self.grid, n)
-                        else:
+        if not self.SOLVED:
+            for p in self.gridPositions():
+                if p.getInGrid(self.grid) == 0:
+                    for n in range(9, 0, -1):
+                        if self.possible(p, n):
+                            if self.QUIT:
+                                return
                             SG.set_state(p.x, p.y, 'solved')
-                        if self.QUIT:
-                            return
-                        self.solve(screen_update_handle)
-                        if not self.SOLVED:
-                            p.setInGrid(self.grid, 0)
-                            SG.set_state(p.x, p.y, 'wrong')
-                screen_update_handle()
-                return
-        self.SOLVED = True
-        screen_update_handle()
+                            p.setInGrid(self.grid, n)
+                            self.solve(screen_update_handle)
+                            if not self.SOLVED:
+                                p.setInGrid(self.grid, 0)
+                                SG.set_state(p.x, p.y, 'wrong')
+                    screen_update_handle()
+                    return
+            self.SOLVED = True
+            self.solve(screen_update_handle)
 
 
 class NumberLabels:
 
-    DEFAULT_FONT = "lib/Anonymous_Pro.ttf"
+    DEFAULT_FONT = "assets/Anonymous_Pro.ttf"
 
     def __init__(self, size, colors=[], fontname=None):
         if not fontname:
@@ -106,19 +109,17 @@ class SurfaceGrid:
         self._states = {}
         self._surfaces = []
         self._selected = None
-        self.background = (50,50,50)
-        self.rects_color = (244, 244, 244)
+        self.background = (250, 250, 250)
+        self.rects_color = (50, 50, 50)
         #
-        self.empty = (200, 180, 0)
         self.given = (120, 120, 120)
+        self.empty = self.rects_color
         self.wrong = (255, 0, 0)
-        self.found = (0, 0, 255)
         self.solved = (0, 255, 0)
-        self.selected = (0, 150, 200)
         #
         self.grid = grid
         self._changed_rects = []
-        self._numbers = NumberLabels(cell_width, [self.given, self.wrong, self.found, self.solved, self.selected])
+        self._numbers = NumberLabels(cell_width, [self.given, self.wrong, self.solved])
         self._init_states()
         self._make_rects()
 
@@ -132,8 +133,9 @@ class SurfaceGrid:
     def _make_rects(self):
         for row, line in enumerate(self.grid):
             for col, n in enumerate(line):
-                self._rects[(col,row)] = pygame.Rect(col*self.cell_width + edge_width, row*self.cell_width + edge_width, self.cell_width - edge_width, self.cell_width - edge_width)
-                self._changed_rects.append((col, row))
+                rec = pygame.Rect(col*self.cell_width + edge_width, row*self.cell_width + edge_width, self.cell_width - edge_width, self.cell_width - edge_width)
+                self._rects[(col,row)] = rec
+                self._changed_rects.append(rec)
 
     def _pull_values(self, grid):
         for y, line in enumerate(self.grid):
@@ -141,10 +143,7 @@ class SurfaceGrid:
                 yield x, y, value
 
     def set_state(self, x, y, state):
-        """ one of:
-            empty given wrong found solved selected
-        """
-        self._changed_rects.append((x,y))
+        self._changed_rects.append(self._rects[(x,y)])
         self._states[(x,y)] = state
 
 
@@ -162,7 +161,7 @@ class SurfaceGrid:
         pv = self._pull_values(grid)
         for rect in self._rects.values():
             x, y, val = next(pv)
-            if (x, y) not in self._changed_rects:
+            if rect not in self._changed_rects:
                 continue
             _changed_rects.append(rect)
             self._render_grid_rect(surface, rect)
@@ -173,26 +172,17 @@ class SurfaceGrid:
         self._changed_rects.clear()
         return _changed_rects
 
-edge_width = 2
-cell_width = 100
-GRID = grid_easy
-screen = pygame.display.set_mode((cell_width*9, cell_width*9))
-
-
-SG = SurfaceGrid(cell_width, edge_width, GRID)
-SS = SudokuSolver(GRID)
-
-
-
 def _mainloop():
     def _loop():
         for event in pygame.event.get():
             if event.type == QUIT:
                 SS.QUIT = True
+            if event.type == KEYDOWN and event.key == K_ESCAPE:
+                SS.QUIT = True
     def _update():
         screen.fill(SG.background)
-        rects = SG.render(GRID, screen)
-        pygame.display.update(rects)
+        updated_rects = SG.render(GRID, screen)
+        pygame.display.update(updated_rects)
         
     if SS.SOLVED:
         _update()
@@ -203,13 +193,23 @@ def _mainloop():
         _loop()  
 
 # @profile
-def main():
+def run():
     try:
         SS.solve(screen_update_handle=_mainloop)
     except KeyboardInterrupt:
         pass
 
-
 if __name__ == '__main__':
-    main()
+
+    edge_width = 2
+    cell_width = 100
+    GRID = grid_easy
+    screen = pygame.display.set_mode((cell_width * 9, cell_width * 9))
+    pygame.display.set_caption("Sudoku Solver")
+    pygame.display.set_icon(pygame.image.load("assets/icon.png"))
+
+    SG = SurfaceGrid(cell_width, edge_width, GRID)
+    SS = SudokuSolver(GRID)
+
+    run()
 
