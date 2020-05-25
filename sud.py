@@ -79,7 +79,8 @@ class SudokuSolver:
                     return
             self.SOLVED = True
             self.solve(screen_update_handle)
-
+        else:
+            screen_update_handle()
 
 class NumberLabels:
 
@@ -99,7 +100,6 @@ class NumberLabels:
     def blit(self, number, color, surface, position):
         if color in self.labels:
             surface.blit(self.labels[color][number], position)
-
 
 class SurfaceGrid:
     def __init__(self, cell_width, edge_width, grid):
@@ -172,8 +172,9 @@ class SurfaceGrid:
         self._changed_rects.clear()
         return _changed_rects
 
+
 def _mainloop():
-    def _loop():
+    def _handle_events():
         for event in pygame.event.get():
             if event.type == QUIT:
                 SS.QUIT = True
@@ -187,10 +188,10 @@ def _mainloop():
     if SS.SOLVED:
         _update()
         while not SS.QUIT:
-            _loop()
+            _handle_events()
     else:
         _update()
-        _loop()  
+        _handle_events()  
 
 # @profile
 def run():
@@ -212,4 +213,3 @@ if __name__ == '__main__':
     SS = SudokuSolver(GRID)
 
     run()
-
